@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export interface GeminiConfig {
   model: string;
@@ -33,12 +33,12 @@ export interface AnalyzePromptResponse {
 }
 
 export class GeminiClient {
-  private ai: GoogleGenAI;
+  private genAI: GoogleGenerativeAI;
   private config: GeminiConfig;
 
   constructor(config?: Partial<GeminiConfig>) {
     const defaultConfig: GeminiConfig = {
-      model: 'gemini-2.5-pro-preview-05-06',
+      model: 'gemini-1.5-pro',
       apiKey: process.env.GEMINI_API_KEY!,
       temperature: 0.7,
       maxTokens: 1000,
@@ -46,33 +46,25 @@ export class GeminiClient {
     };
 
     this.config = { ...defaultConfig, ...config };
-    this.ai = new GoogleGenAI({
-      apiKey: this.config.apiKey,
-    });
+    this.genAI = new GoogleGenerativeAI(this.config.apiKey);
   }
 
   /**
    * 生成文字內容
    */
-  async generateText(messages: Message[]): Promise<string> {
+  async generateText(prompt: string): Promise<string> {
     try {
-      const model = this.config.model;
-      const contents = messages.map(msg => ({
-        role: msg.role,
-        parts: msg.parts
-      }));
-
-      const response = await this.ai.models.generateContent({
-        model,
-        config: {
-          responseMimeType: this.config.responseMimeType || 'text/plain',
-          maxTokens: this.config.maxTokens,
-          temperature: this.config.temperature
-        },
-        contents
+      const model = this.genAI.getGenerativeModel({ 
+        model: this.config.model,
+        generationConfig: {
+          temperature: this.config.temperature,
+          maxOutputTokens: this.config.maxTokens,
+        }
       });
 
-      return response.text || '';
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text();
     } catch (error) {
       console.error('Gemini text generation error:', error);
       throw new Error('AI服務暫時無法使用，請稍後再試');
@@ -83,29 +75,25 @@ export class GeminiClient {
    * 流式生成文字內容
    */
   async generateTextStream(
-    messages: Message[],
+    prompt: string,
     onChunk: (chunk: string) => void
   ): Promise<string> {
     try {
-      const model = this.config.model;
-      const contents = messages.map(msg => ({
-        role: msg.role,
-        parts: msg.parts
-      }));
-
-      const response = await this.ai.models.generateContentStream({
-        model,
-        config: {
-          responseMimeType: this.config.responseMimeType || 'text/plain'
-        },
-        contents
+      const model = this.genAI.getGenerativeModel({ 
+        model: this.config.model,
+        generationConfig: {
+          temperature: this.config.temperature,
+        }
       });
 
+      const result = await model.generateContentStream(prompt);
+
       let fullText = '';
-      for await (const chunk of response) {
-        if (chunk.text) {
-          fullText += chunk.text;
-          onChunk(chunk.text);
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        if (chunkText) {
+          fullText += chunkText;
+          onChunk(chunkText);
         }
       }
 
@@ -154,12 +142,7 @@ export class GeminiClient {
 }`;
 
     try {
-      const messages: Message[] = [{
-        role: 'user',
-        parts: [{ text: analysisPrompt }]
-      }];
-
-      const response = await this.generateText(messages);
+      const response = await this.generateText(analysisPrompt);
       
       // 嘗試解析JSON回應
       const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -214,12 +197,7 @@ export class GeminiClient {
 4. 使用親子友善的語言`;
 
     try {
-      const messages: Message[] = [{
-        role: 'user',
-        parts: [{ text: guidancePrompt }]
-      }];
-
-      return await this.generateText(messages);
+      return await this.generateText(guidancePrompt);
     } catch (error) {
       console.error('Guidance generation error:', error);
       return '很棒的嘗試！讓我們試著加入更多細節來讓描述更生動吧！';
@@ -243,9 +221,9 @@ export class GeminiClient {
    */
   private getFallbackAnalysis(userPrompt: string, targetLevel: number): AnalyzePromptResponse {
     const wordCount = userPrompt.split(' ').length;
-    const hasAdjectives = /美麗|可愛|溫暖|明亮|開心|大|小|紅|藍|綠/.test(userPrompt);
+    const hasAdjectives = /美麗|可愛|溫暖|明亮|開心|大|小|紅|藍|綠|白|黑/.test(userPrompt);
     const hasActions = /跑|跳|玩|笑|哭|看|聽|吃|睡/.test(userPrompt);
-    const hasEmotions = /開心|快樂|興奮|溫暖|愛|喜歡/.test(userPrompt);
+    const hasEmotions = /開心|快樂|興奮|溫暖|愛|喜歡|難過|生氣/.test(userPrompt);
 
     let baseScore = Math.min(40 + wordCount * 5, 70);
     if (hasAdjectives) baseScore += 10;
