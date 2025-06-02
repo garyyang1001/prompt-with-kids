@@ -98,10 +98,11 @@ export default function LearnPage() {
         isProcessing: false,
         systemResponse: result.systemResponse,
         promptAnalysis: result.promptAnalysis,
-        levelProgress: result.levelProgress,
-        skillsLearned: result.skillsLearned,
+        levelProgress: result.levelProgress === undefined ? null : result.levelProgress, // Ensure undefined becomes null
+        skillsLearned: result.skillsLearned || [], // Ensure undefined becomes empty array
         showAnalysis: true,
-        hasAdvanced: result.shouldAdvanceLevel
+        // TODO: Adapt hasAdvanced for toddler stage progression if different from levels
+        hasAdvanced: !!result.shouldAdvanceLevel 
       }));
 
       // 語音播放系統回應

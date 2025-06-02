@@ -1,149 +1,127 @@
-# 🚀 第一階段開發指南
+# 🚀 MVP 開發指南 - 「今天的小冒險」
 
-## 📋 當前進度
+## 📋 當前狀態 (MVP 完成)
 
-### ✅ 已完成
-- [x] 基礎專案架構設置
-- [x] TypeScript 和 Tailwind CSS 配置
-- [x] 首頁和基礎 UI 設計
-- [x] 類型定義系統
-- [x] Google Gemini AI 客戶端封裝
-- [x] 核心工具函數
+### ✅ 已完成核心功能
+- [x] **「今天的小冒險」創作模板**: 專為3-6歲幼兒設計的5階段故事模板。
+- [x] **AI輔助與引導**: 使用 Google Gemini (`gemini-1.5-flash-preview-0514` 及文字模型) 提供：
+    - 針對幼兒輸入的分析與回饋 (`analyzePrompt` 已適配 `isToddlerMode`)。
+    - 配合家長引導的AI提示語 (`generateGuidance` 已適配 `isToddlerMode`)。
+    - 故事關鍵節點的圖像生成。
+- [x] **故事儲存與讀取**: 使用 Supabase 儲存完成的故事，並提供讀取界面。
+- [x] **核心API路由**: 建立 `/api/story/create`, `/api/story/interact`, `/api/story/archive`。
+- [x] **基礎前端界面**:
+    - `/story/toddler-adventure`: 「今天的小冒險」故事創作頁面。
+    - `/story/archive`: 已儲存故事的展示頁面。
 
-### 🎯 當前狀態
-專案已建立完整的基礎架構，包含：
+### 🎯 MVP 技術棧
 - **前端框架**: Next.js 14 + TypeScript + Tailwind CSS
-- **AI 服務**: Google Gemini 2.5 Pro 整合
-- **設計系統**: 溫暖親子風格的色彩和組件
-- **類型安全**: 完整的 TypeScript 類型定義
+- **AI 服務**: Google Gemini (`gemini-1.5-flash-preview-0514` for images, text models for guidance/analysis)
+- **數據庫**: Supabase (PostgreSQL)
+- **部署**: Vercel (預期)
 
 ## 🛠 快速開始
 
-### 1. 環境設置
-```bash
-# 克隆專案
-git clone https://github.com/garyyang1001/prompt-with-kids.git
-cd prompt-with-kids
-
-# 安裝依賴
-npm install
-
-# 設置環境變數
-cp .env.example .env.local
-```
-
-### 2. 配置 Gemini API
-在 `.env.local` 中加入你的 API Key：
-```bash
+與主 `README.md` 中的「快速開始」章節同步。主要確保以下環境變數已在 `.env.local` 中正確配置：
+```env
 GEMINI_API_KEY=your_gemini_api_key_here
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+NEXT_PUBLIC_APP_URL=http://localhost:3000 
 ```
-
-### 3. 啟動開發
-```bash
-npm run dev
-```
-
-訪問 http://localhost:3000 查看首頁
+然後運行 `npm install` 和 `npm run dev`。
 
 ## 🧠 核心架構說明
 
-### Gemini AI 客戶端 (`src/lib/ai/gemini-client.ts`)
-這是第一階段的核心組件，提供兩個主要功能：
+### 1. `src/lib/learning/toddler-adventure-template.ts`
+- 定義 `ToddlerAdventureTemplate` 和 `ToddlerStage` 接口。
+- 包含 `toddlerAdventureTemplateData` 常量，詳細描述了「今天的小冒險」5個階段的所有屬性（ID, 標題, 提示語, 家長引導, 視覺提示詞等）。
 
-#### 1. Prompt 分析 (`analyzePrompt`)
-```typescript
-// 分析用戶輸入的 prompt 品質
-const analysis = await geminiClient.analyzePrompt("小兔子找胡蘿蔔", 1);
+### 2. `src/lib/learning/learning-engine.ts`
+- **`LearningEngine` 類**:
+    - 管理學習會話 (`LearningSession`)。
+    - 在構造函數中加載並適配 `toddlerAdventureTemplateData` 到內部的 `templates` Map。
+    - `startSession`: 初始化「今天的小冒險」會話，將 `currentLevel` 設置為0（代表階段索引）。為幼兒模式初始化 `stageInputs` 以記錄每階段輸入。
+    - `processInteraction`:
+        - 根據 `templateId` 判斷是否為 `isToddlerMode`。
+        - **幼兒模式**:
+            - 將 `currentLevel` 解讀為階段索引，推進故事階段。
+            - 從 `toddlerAdventureTemplateData.stages` 獲取當前及下一階段的完整資訊 (`ToddlerStage` 對象)。
+            - 在 `session.stageInputs` 中記錄用戶對當前階段的輸入。
+            - 返回包含 `currentToddlerStage`, `nextToddlerStage`, `isStoryComplete` 等特定於幼兒模板的 `ProcessInteractionResponse`。
+            - 舊有的 `evaluateProgress`, `determineSkillsLearned` 等方法在此模式下被繞過或簡化。
+        - **其他模式**: (保留原有邏輯，當前MVP主要測試幼兒模式)
+        - 調用 `geminiClient` 的 `analyzePrompt` 和 `generateGuidance` 時傳遞 `isToddlerMode` 標誌。
 
-// 回傳結果包含：
-// - 各維度評分 (clarity, detail, emotion, structure, visual)
-// - 總體評分 (overall)
-// - 改進建議 (suggestions)
-// - 優化版本 (optimizedPrompt)
-```
+### 3. `src/lib/ai/gemini-client.ts`
+- **`GeminiClient` 類**:
+    - `generateImage`: 使用 `gemini-1.5-flash-preview-0514` 模型生成圖片。
+    - `analyzePrompt`: 接收 `isToddlerMode` 標誌。
+        - 若為幼兒模式，使用特製的系統提示詞，分析重點在於輸入是否清晰、是否投入，並提供簡單建議。評分維度（如detail, structure）會做簡化處理。
+    - `generateGuidance`: 接收 `isToddlerMode` 標誌。
+        - 若為幼兒模式，使用特製的系統提示詞，生成簡短、鼓勵性、與當前幼兒故事階段緊密相關的家長引導語。
 
-#### 2. 學習引導 (`generateGuidance`)
-```typescript
-// 生成個人化學習引導
-const guidance = await geminiClient.generateGuidance(
-  "小兔子找胡蘿蔔", 
-  1, 
-  "第一次嘗試"
-);
+### 4. `src/lib/supabase/client.ts`
+- 初始化並導出 Supabase 客戶端實例，使用 `NEXT_PUBLIC_SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`。
 
-// 回傳溫暖鼓勵的引導文字
-```
+### 5. `src/types/database.ts`
+- 定義 `Story` 和 `StoryStageData` 接口，對應 Supabase 中 `stories` 表的結構，用於儲存完成的故事。
 
-### 類型系統
-- `src/types/learning.ts`: 學習流程相關類型
-- `src/types/ai.ts`: AI 服務相關類型
+## 🔌 API 路由 (`src/app/api/story/`)
 
-### 設計系統
-- **主色調**: 溫暖橙色 (#FF8C42)
-- **輔助色**: 親和藍色 (#4A90E2)
-- **背景色**: 米白色系，營造溫暖感
-- **組件樣式**: 卡片式設計，圓角和陰影
+### 1. `POST /api/story/create/route.ts` (已實現 ✅)
+- **請求**: `{ userId: string }`
+- **處理**:
+    - 強制使用 `templateId = 'toddler_adventure'`.
+    - 調用 `learningEngine.startSession`。
+    - 獲取 `toddlerAdventureTemplateData` 的首個階段資訊。
+- **回應**: `{ session: LearningSession, currentStage: ToddlerStage }` (包含首階段的完整資訊)。
 
-## 📋 下一步開發任務
+### 2. `POST /api/story/interact/route.ts` (已實現 ✅)
+- **請求**: `{ sessionId: string, stageId: string, userInput: string | Record<string, any> }`
+- **處理**:
+    - 調用 `learningEngine.processInteraction`。
+    - **圖片生成**: 若當前階段 (e.g., 'character', 'place', 'happy_solution') 配置了 `visualCues`，則調用 `geminiClient.generateImage`。
+    - **故事儲存**: 若 `interactionResult.isStoryComplete` 為 `true` 且為幼兒模板：
+        - 從 `LearningSession` 中提取 `userId` 和 `stageInputs`。
+        - 構建 `Story` 對象，其中 `stages_data` 包含每個階段的ID、標題、用戶輸入及對應的圖片URL（目前為base64）。
+        - `final_image_url` 儲存最後生成的圖片（目前為base64）。
+        - 數據異步寫入 Supabase `stories` 表。
+- **回應**: `ProcessInteractionResponse` 內容，包含 `currentToddlerStage`, `nextToddlerStage`, `isStoryComplete`, `systemResponse`, `imageData` 等。
 
-### 🎯 接下來要實現的功能
+### 3. `GET /api/story/archive/route.ts` (已實現 ✅)
+- **請求**: Query parameter `userId=<user_id>`
+- **處理**:
+    - 根據 `userId` 從 Supabase `stories` 表查詢故事。
+- **回應**: `Story[]` (用戶的故事列表)。
 
-#### 1. 學習流程頁面 (`/learn`)
-- [ ] 建立學習主頁面 `src/app/learn/page.tsx`
-- [ ] 實現四級學習進程的UI設計
-- [ ] 用戶輸入組件和進度追蹤
+## 🖥️ 前端頁面
 
-#### 2. 學習引擎
-- [ ] `src/lib/learning/learning-engine.ts`
-- [ ] 會話管理和進度追蹤
-- [ ] 等級升級邏輯
+### 1. `/story/toddler-adventure/page.tsx` (已實現 ✅ - 基礎)
+- 實現「今天的小冒險」的階段式創作流程。
+- 調用 `/api/story/create` 開始故事，調用 `/api/story/interact` 推進階段。
+- 根據 `currentStage.interactionType` (choice/open_ended) 展示不同輸入方式。
+- 展示家長引導 (`parentGuidance`)、兒童提示 (`childPrompt`)、AI生成的圖片和回應。
+- 故事完成後顯示總結和重新開始按鈕。
 
-#### 3. API 路由
-- [ ] `src/app/api/analyze-prompt/route.ts`
-- [ ] `src/app/api/generate-guidance/route.ts`
-- [ ] 前後端串接
+### 2. `/story/archive/page.tsx` (已實現 ✅ - 基礎)
+- 調用 `/api/story/archive` 獲取並展示指定用戶已儲存的故事。
+- 循環展示每個故事的標題、創建時間、各階段內容及相關圖片。
 
-#### 4. 學習組件
-- [ ] `src/components/learning/PromptInput.tsx`
-- [ ] `src/components/learning/LearningGuide.tsx`
-- [ ] `src/components/learning/ProgressTracker.tsx`
+## 🧪 測試驗證 (初步)
+- **手動測試**: 已通過 `curl` 命令對API路由進行了基本的功能驗證。
+- **單元測試用例**: 已在先前步驟中為 `LearningEngine` 和 API 路由定義了詳細的測試用例列表 (見相關 subtask report)。這些用例可作為後續編寫自動化測試的基礎。
+- **前端手動操作**: 已對 `/story/toddler-adventure` 和 `/story/archive` 頁面進行了基本操作測試，確保流程可以走通。
 
-## 💡 開發建議
-
-### 1. 按順序開發
-建議按照以下順序完成：
-1. API 路由 → 2. 學習引擎 → 3. 學習頁面 → 4. 學習組件
-
-### 2. 測試驗證
-每個功能完成後，記得：
-- 測試 Gemini API 回應品質
-- 驗證學習流程邏輯
-- 確保用戶體驗流暢
-
-### 3. 漸進式完善
-- 先實現基本功能
-- 再優化用戶體驗
-- 最後加入進階功能
-
-## 🐛 常見問題
-
-### Q: Gemini API 錯誤怎麼辦？
-A: 檢查 API Key 是否正確設置，確認網路連接正常
-
-### Q: 樣式沒有生效？
-A: 確認 Tailwind CSS 配置正確，檢查類名是否拼寫正確
-
-### Q: TypeScript 錯誤？
-A: 檢查類型導入路徑，確認所有類型定義文件存在
-
-## 🎯 成功指標
-
-第一階段完成時應該能夠：
-- ✅ 用戶可以輸入簡單描述
-- ✅ 系統能分析並給出回饋
-- ✅ 提供溫暖的學習引導
-- ✅ 展示基本的學習進度
+## 💡 下一步開發建議 (MVP後)
+- **UI/UX 優化**: 針對幼兒和家長的操作習慣，進一步打磨界面。
+- **實際用戶測試**: 邀請目標用戶群體進行測試，收集反饋。
+- **圖片儲存優化**: 將圖片（base64）上傳到 Supabase Storage，數據庫中僅儲存圖片URL。
+- **健壯性與錯誤處理**: 完善服務器端和客戶端的錯誤處理機制。
+- **用戶認證**: 引入正式的用戶身份驗證系統，取代當前的硬編碼 `userId`。
+- **更多模板**: 逐步增加更多不同主題和年齡段的創作模板。
+- **自動化測試**: 基於已定義的測試用例，編寫單元測試和集成測試。
 
 ---
 
-**準備好繼續開發了嗎？讓我們一起創造出色的學習體驗！** 🌟
+**MVP「今天的小冒險」核心功能已搭建完成！後續將聚焦於測試、優化和迭代。** 🌟
