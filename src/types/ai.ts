@@ -6,19 +6,6 @@ export interface GeminiConfig {
   temperature?: number;
 }
 
-export interface ContentPart {
-  text?: string;
-  image?: {
-    data: string;
-    mimeType: string;
-  };
-}
-
-export interface Message {
-  role: 'user' | 'model';
-  parts: ContentPart[];
-}
-
 export interface AnalyzePromptResponse {
   clarity: number;          // 清晰度 0-100
   detail: number;          // 細節豐富度 0-100
