@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 export interface GeminiConfig {
   model: string;
@@ -33,12 +33,12 @@ export interface AnalyzePromptResponse {
 }
 
 export class GeminiClient {
-  private genAI: GoogleGenerativeAI;
+  private ai: GoogleGenAI;
   private config: GeminiConfig;
 
   constructor(config?: Partial<GeminiConfig>) {
     const defaultConfig: GeminiConfig = {
-      model: 'gemini-1.5-pro',
+      model: 'gemini-2.0-flash-preview',
       apiKey: process.env.GEMINI_API_KEY!,
       temperature: 0.7,
       maxTokens: 1000,
@@ -46,25 +46,42 @@ export class GeminiClient {
     };
 
     this.config = { ...defaultConfig, ...config };
-    this.genAI = new GoogleGenerativeAI(this.config.apiKey);
+    this.ai = new GoogleGenAI({
+      apiKey: this.config.apiKey,
+    });
   }
 
   /**
    * 生成文字內容
    */
-  async generateText(prompt: string): Promise<string> {
+  async generateText(messages: Message[]): Promise<string> {
     try {
-      const model = this.genAI.getGenerativeModel({ 
-        model: this.config.model,
-        generationConfig: {
-          temperature: this.config.temperature,
-          maxOutputTokens: this.config.maxTokens,
-        }
+      const model = this.config.model;
+      const config = {
+        responseMimeType: this.config.responseMimeType || 'text/plain',
+        maxTokens: this.config.maxTokens,
+        temperature: this.config.temperature
+      };
+      
+      const contents = messages.map(msg => ({
+        role: msg.role,
+        parts: msg.parts
+      }));
+
+      const response = await this.ai.models.generateContentStream({
+        model,
+        config,
+        contents,
       });
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      return response.text();
+      let fullText = '';
+      for await (const chunk of response) {
+        if (chunk.text) {
+          fullText += chunk.text;
+        }
+      }
+
+      return fullText;
     } catch (error) {
       console.error('Gemini text generation error:', error);
       throw new Error('AI服務暫時無法使用，請稍後再試');
@@ -75,25 +92,31 @@ export class GeminiClient {
    * 流式生成文字內容
    */
   async generateTextStream(
-    prompt: string,
+    messages: Message[],
     onChunk: (chunk: string) => void
   ): Promise<string> {
     try {
-      const model = this.genAI.getGenerativeModel({ 
-        model: this.config.model,
-        generationConfig: {
-          temperature: this.config.temperature,
-        }
+      const model = this.config.model;
+      const config = {
+        responseMimeType: this.config.responseMimeType || 'text/plain'
+      };
+      
+      const contents = messages.map(msg => ({
+        role: msg.role,
+        parts: msg.parts
+      }));
+
+      const response = await this.ai.models.generateContentStream({
+        model,
+        config,
+        contents,
       });
 
-      const result = await model.generateContentStream(prompt);
-
       let fullText = '';
-      for await (const chunk of result.stream) {
-        const chunkText = chunk.text();
-        if (chunkText) {
-          fullText += chunkText;
-          onChunk(chunkText);
+      for await (const chunk of response) {
+        if (chunk.text) {
+          fullText += chunk.text;
+          onChunk(chunk.text);
         }
       }
 
@@ -101,6 +124,56 @@ export class GeminiClient {
     } catch (error) {
       console.error('Gemini stream generation error:', error);
       throw new Error('AI服務暫時無法使用，請稍後再試');
+    }
+  }
+
+  /**
+   * 生成圖片
+   */
+  async generateImage(prompt: string): Promise<string> {
+    try {
+      const model = 'gemini-2.0-flash-preview-image-generation';
+      const config = {
+        responseModalities: ['IMAGE', 'TEXT'],
+        responseMimeType: 'text/plain',
+      };
+      
+      const contents = [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: prompt,
+            },
+          ],
+        },
+      ];
+
+      const response = await this.ai.models.generateContentStream({
+        model,
+        config,
+        contents,
+      });
+
+      // 處理圖片回應
+      for await (const chunk of response) {
+        if (!chunk.candidates || !chunk.candidates[0].content || !chunk.candidates[0].content.parts) {
+          continue;
+        }
+        
+        if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
+          const inlineData = chunk.candidates[0].content.parts[0].inlineData;
+          const imageData = inlineData.data;
+          
+          // 返回base64圖片數據
+          return `data:${inlineData.mimeType};base64,${imageData}`;
+        }
+      }
+
+      throw new Error('未能生成圖片');
+    } catch (error) {
+      console.error('Gemini image generation error:', error);
+      throw new Error('圖片生成失敗，請稍後再試');
     }
   }
 
@@ -142,7 +215,12 @@ export class GeminiClient {
 }`;
 
     try {
-      const response = await this.generateText(analysisPrompt);
+      const messages: Message[] = [{
+        role: 'user',
+        parts: [{ text: analysisPrompt }]
+      }];
+
+      const response = await this.generateText(messages);
       
       // 嘗試解析JSON回應
       const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -197,7 +275,12 @@ export class GeminiClient {
 4. 使用親子友善的語言`;
 
     try {
-      return await this.generateText(guidancePrompt);
+      const messages: Message[] = [{
+        role: 'user',
+        parts: [{ text: guidancePrompt }]
+      }];
+
+      return await this.generateText(messages);
     } catch (error) {
       console.error('Guidance generation error:', error);
       return '很棒的嘗試！讓我們試著加入更多細節來讓描述更生動吧！';
