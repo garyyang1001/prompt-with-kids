@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Sparkles, MessageCircle, Target, Volume2 } from 'lucide-react';
@@ -24,7 +24,7 @@ interface LearningState {
   hasAdvanced: boolean;
 }
 
-export default function LearnPage() {
+function LearnPageContent() {
   const searchParams = useSearchParams();
   const templateId = searchParams.get('template') || 'daily-life';
 
@@ -388,5 +388,20 @@ export default function LearnPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LearnPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Sparkles className="w-12 h-12 text-primary mx-auto mb-4 animate-spin" />
+          <p className="text-gray-600">正在載入...</p>
+        </div>
+      </div>
+    }>
+      <LearnPageContent />
+    </Suspense>
   );
 }
