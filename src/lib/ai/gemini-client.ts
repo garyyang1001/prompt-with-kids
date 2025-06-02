@@ -8,19 +8,6 @@ export interface GeminiConfig {
   temperature?: number;
 }
 
-export interface ContentPart {
-  text?: string;
-  image?: {
-    data: string;
-    mimeType: string;
-  };
-}
-
-export interface Message {
-  role: 'user' | 'model';
-  parts: ContentPart[];
-}
-
 export interface AnalyzePromptResponse {
   clarity: number;
   detail: number;
@@ -38,7 +25,7 @@ export class GeminiClient {
 
   constructor(config?: Partial<GeminiConfig>) {
     const defaultConfig: GeminiConfig = {
-      model: 'gemini-2.0-flash-preview',
+      model: 'gemini-2.0-flash-001',
       apiKey: process.env.GEMINI_API_KEY!,
       temperature: 0.7,
       maxTokens: 1000,
@@ -54,34 +41,14 @@ export class GeminiClient {
   /**
    * 生成文字內容
    */
-  async generateText(messages: Message[]): Promise<string> {
+  async generateText(prompt: string): Promise<string> {
     try {
-      const model = this.config.model;
-      const config = {
-        responseMimeType: this.config.responseMimeType || 'text/plain',
-        maxTokens: this.config.maxTokens,
-        temperature: this.config.temperature
-      };
-      
-      const contents = messages.map(msg => ({
-        role: msg.role,
-        parts: msg.parts
-      }));
-
-      const response = await this.ai.models.generateContentStream({
-        model,
-        config,
-        contents,
+      const response = await this.ai.models.generateContent({
+        model: this.config.model,
+        contents: prompt,
       });
 
-      let fullText = '';
-      for await (const chunk of response) {
-        if (chunk.text) {
-          fullText += chunk.text;
-        }
-      }
-
-      return fullText;
+      return response.text || '';
     } catch (error) {
       console.error('Gemini text generation error:', error);
       throw new Error('AI服務暫時無法使用，請稍後再試');
@@ -92,24 +59,13 @@ export class GeminiClient {
    * 流式生成文字內容
    */
   async generateTextStream(
-    messages: Message[],
+    prompt: string,
     onChunk: (chunk: string) => void
   ): Promise<string> {
     try {
-      const model = this.config.model;
-      const config = {
-        responseMimeType: this.config.responseMimeType || 'text/plain'
-      };
-      
-      const contents = messages.map(msg => ({
-        role: msg.role,
-        parts: msg.parts
-      }));
-
       const response = await this.ai.models.generateContentStream({
-        model,
-        config,
-        contents,
+        model: this.config.model,
+        contents: prompt,
       });
 
       let fullText = '';
@@ -132,27 +88,9 @@ export class GeminiClient {
    */
   async generateImage(prompt: string): Promise<string> {
     try {
-      const model = 'gemini-2.0-flash-preview-image-generation';
-      const config = {
-        responseModalities: ['IMAGE', 'TEXT'],
-        responseMimeType: 'text/plain',
-      };
-      
-      const contents = [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: prompt,
-            },
-          ],
-        },
-      ];
-
       const response = await this.ai.models.generateContentStream({
-        model,
-        config,
-        contents,
+        model: 'gemini-2.0-flash-preview-image-generation',
+        contents: prompt,
       });
 
       // 處理圖片回應
@@ -215,12 +153,7 @@ export class GeminiClient {
 }`;
 
     try {
-      const messages: Message[] = [{
-        role: 'user',
-        parts: [{ text: analysisPrompt }]
-      }];
-
-      const response = await this.generateText(messages);
+      const response = await this.generateText(analysisPrompt);
       
       // 嘗試解析JSON回應
       const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -275,12 +208,7 @@ export class GeminiClient {
 4. 使用親子友善的語言`;
 
     try {
-      const messages: Message[] = [{
-        role: 'user',
-        parts: [{ text: guidancePrompt }]
-      }];
-
-      return await this.generateText(messages);
+      return await this.generateText(guidancePrompt);
     } catch (error) {
       console.error('Guidance generation error:', error);
       return '很棒的嘗試！讓我們試著加入更多細節來讓描述更生動吧！';
