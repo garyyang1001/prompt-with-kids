@@ -37,7 +37,16 @@ export function VoiceChat({ onResult, disabled = false, placeholder = "按住按
       setIsListening(true);
     };
 
-    recognition.onresult = (event) => {
+    // Define more specific event types if global ones are not found
+    interface CustomSpeechRecognitionEvent extends Event {
+      readonly results: SpeechRecognitionResultList;
+    }
+    interface CustomSpeechRecognitionErrorEvent extends Event {
+      readonly error: string; // Standard is SpeechRecognitionErrorCode but string is safer if type incomplete
+      readonly message?: string;
+    }
+
+    recognition.onresult = (event: CustomSpeechRecognitionEvent) => {
       const results = event.results;
       const lastResult = results[results.length - 1];
       const transcript = lastResult[0].transcript;
@@ -51,8 +60,8 @@ export function VoiceChat({ onResult, disabled = false, placeholder = "按住按
       }
     };
 
-    recognition.onerror = (event) => {
-      console.error('語音識別錯誤:', event.error);
+    recognition.onerror = (event: CustomSpeechRecognitionErrorEvent) => {
+      console.error('語音識別錯誤:', event.error, event.message);
       setIsListening(false);
       setTranscript('');
     };
