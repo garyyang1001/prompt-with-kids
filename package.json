@@ -1,0 +1,45 @@
+{
+  "name": "prompt-with-kids",
+  "version": "0.1.0",
+  "description": "AI親子創作坊 - Prompt Engineering自然學習平台",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.18.0",
+    "@headlessui/react": "^2.1.8",
+    "@heroicons/react": "^2.1.5",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.439.0",
+    "next": "14.2.4",
+    "react": "^18",
+    "react-dom": "^18",
+    "tailwind-merge": "^2.5.2",
+    "zustand": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.4",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5"
+  },
+  "keywords": [
+    "AI教育",
+    "親子學習",
+    "Prompt Engineering",
+    "Next.js",
+    "Google Gemini"
+  ],
+  "author": "garyyang1001",
+  "license": "MIT"
+}
